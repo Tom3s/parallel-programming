@@ -6,6 +6,9 @@
 #include <atomic>
 #include <mutex>
 #include <shared_mutex>
+#include <chrono>
+#include <ctime>
+#include <cstdlib>
 
 const std::string nPrefix = "-n";
 
@@ -16,6 +19,7 @@ struct Product {
 	std::atomic<int> count = 100;
 
 	static int productIdCounter;
+	static std::mutex productMutex;
 
 	Product() = default;
 
@@ -30,26 +34,78 @@ struct Product {
 
 	void decreaseCount(int count) {
 		this->count -= count;
-		if (this->count <= 0) {
-			std::string out = "Ran out of " + this->name + "\n";
-			std::cout << out << std::flush;
-		}
 	}
 };
 
 int Product::productIdCounter = 0;
+std::mutex Product::productMutex;
 
 std::vector<Product> PRODUCT_LIST = {
-	{"Tomato",      2,  100},
-	{"Potato",      4,  100},
-	{"Onion",       7,  100},
-	{"Carrot",      3,  100},
-	{"Cucumber",    5,  100},
-	{"Pepper",      8,  100},
-	{"Eggplant",    9,  100},
-	{"Garlic",      1,  100},
-	{"Pumpkin",     6,  100},
-	{"Radish",      10, 100},
+	{"Tomato",      2},
+	{"Potato",      4},
+	{"Onion",       7},
+	{"Carrot",      3},
+	{"Cucumber",    5},
+	{"Pepper",      8},
+	{"Eggplant",    9},
+	{"Garlic",      1},
+	{"Pumpkin",     6},
+	{"Radish",      10},
+	{"Cabbage",     5},
+	{"Broccoli",    7},
+	{"Cauliflower", 8},
+	{"Celery",      9},
+	{"Spinach",     3},
+	{"Lettuce",     4},
+	{"Leek",        6},
+	{"Asparagus",   2},
+	{"Beetroot",    1},
+	{"Turnip",      10},
+	{"Zucchini",    9},
+	{"Mushroom",    8},
+	{"Parsley",     7},
+	{"Dill",        6},
+	{"Basil",       5},
+	{"Rosemary",    4},
+	{"Thyme",       3},
+	{"Sage",        2},
+	{"Oregano",     1},
+	{"Mint",        10},
+	{"Lemon",       9},
+	{"Orange",      8},
+	{"Apple",       7},
+	{"Banana",      6},
+	{"Pear",        5},
+	{"Peach",       4},
+	{"Plum",        3},
+	{"Cherry",      2},
+	{"Grape",       1},
+	{"Watermelon",  10},
+	{"Melon",       9},
+	{"Strawberry",  8},
+	{"Raspberry",   7},
+	{"Blueberry",   6},
+	{"Blackberry",  5},
+	{"Cranberry",   4},
+	{"Pineapple",   3},
+	{"Kiwi",        2},
+	{"Mango",       1},
+	{"Papaya",      10},
+	{"Coconut",     9},
+	{"Avocado",     8},
+	{"Grapefruit",  7},
+	{"Pomegranate", 6},
+	{"Apricot",     5},
+	{"Nectarine",   4},
+	{"Fig",         3},
+	{"Date",        2},
+	{"Cherry",      1},
+	{"Lime",        10},
+	{"Lychee",      9},
+	{"Passion",     8},
+	{"Dragon",      7},
+	{"Guava",       6},
+	{"Jackfruit",   5},
 };
 std::mutex productListMutex;
 
@@ -80,25 +136,37 @@ std::atomic<bool> isVerificationInProgress(false);
 std::shared_mutex verificationMutex;
 std::atomic<int> salesRunning = 0;
 
-void sellProduct(int productId, int count = 1) {
+void sellProduct(std::vector<int> productIds) {
 	while (isVerificationInProgress) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 
 	std::shared_lock<std::shared_mutex> readLock(verificationMutex);
 
+	std::vector<int> billedProducts;
+
 	salesRunning++;
-	auto& product = PRODUCT_LIST[productId];
+	for (auto& productId : productIds){	
+		auto& product = PRODUCT_LIST[productId];
 
-	product.decreaseCount(count);
+		std::lock_guard<std::mutex> lock(product.productMutex);
 
-	// std::lock_guard<std::mutex> profitLock(totalProfitMutex);
+		if (product.count <= 0) {
+			continue;
+		}
+
+		product.decreaseCount(1);
+
+		billedProducts.push_back(productId);
+
+		totalProfit += product.price;
+	}
 	std::lock_guard<std::mutex> lock(billsMutex);
-
-	totalProfit += product.price * count;
-	bills.push_back(createBill({productId}));
+	bills.push_back(createBill(billedProducts));
 	salesRunning--;
 }
+
+std::vector<int> initialProductCounts;
 
 void verifyBills() {
 	std::unique_lock<std::shared_mutex> writeLock(verificationMutex);
@@ -109,7 +177,7 @@ void verifyBills() {
 
 	int profitByBill = 0;
 
-	std::vector<int> productCountByBill(PRODUCT_LIST.size(), 100);
+	std::vector<int> productCountByBill(initialProductCounts);
 
 	for (auto& bill : bills) {
 		profitByBill += bill.totalPrice;
@@ -139,6 +207,8 @@ void verifyBills() {
 
 
 int main(int nrArgs, char* args[]) {
+	std::srand(std::time(nullptr));
+
 	auto n = 100;
 
 	for (int i = 0; i < nrArgs; i++) {
@@ -150,14 +220,33 @@ int main(int nrArgs, char* args[]) {
 		}
 	}
 
+	for (auto& product : PRODUCT_LIST) {
+		auto newCount = std::rand() % n + 100 * n;
+		product.count = newCount;
+		initialProductCounts.push_back(product.count);
+	}
+
 	std::vector<std::thread> threads;
 
 	for (int i = 0; i < n; i++) {
 		// threads.emplace_back(printHello, i);
+
+		std::vector<int> productsToSell;
+
 		for (int j = 0; j < PRODUCT_LIST.size(); j++) {
-			threads.emplace_back(sellProduct, j, 1);
+			if (PRODUCT_LIST[j].count <= 0) {
+				continue;
+			}
+			int count = std::rand() % std::max(1, PRODUCT_LIST[j].count / n) + 1;
+			auto productIds = std::vector<int>(count, j);
+			productsToSell.insert(productsToSell.end(), productIds.begin(), productIds.end());
 		}
-		threads.emplace_back(verifyBills);
+
+		threads.emplace_back(sellProduct, productsToSell);
+
+		if (i % (n / 10) == 0) {
+			threads.emplace_back(verifyBills);
+		}
 	}
 
 	for (auto& t : threads) {
@@ -165,6 +254,10 @@ int main(int nrArgs, char* args[]) {
 	}
 
 	std::cout << "Total profit: " << totalProfit << std::endl;
+	for (int i = 0; i < PRODUCT_LIST.size(); i++) {
+		std::cout << PRODUCT_LIST[i].name << ": "<< initialProductCounts[i] << " -> " << PRODUCT_LIST[i].count << std::endl;
+	}
+	std::cout << std::flush;
 
 	return 0;
 }
