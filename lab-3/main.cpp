@@ -117,6 +117,8 @@ int main(int nrArgs, char* args[]) {
 	// 	std::cout << std::endl;
 	// }
 
+
+	// BAtching
 	result = Matrix(n, std::vector<int>(n, 0));
 
 	startTime = clock();
@@ -137,6 +139,8 @@ int main(int nrArgs, char* args[]) {
 
 	std::cout << "Time to calculate product for " << n << "x" << m << " matrix with batching: `" << ms << " ms`" << std::endl;
 
+
+	// threadpool
 	result = Matrix(n, std::vector<int>(n, 0));
 
 	startTime = clock();
@@ -156,4 +160,31 @@ int main(int nrArgs, char* args[]) {
 	ms = duration_cast<milliseconds>(endTime - startTime).count();
 
 	std::cout << "- Time to calculate product for " << n << "x" << m << " matrix with pool: `" << ms << " ms`" << std::endl;
+
+	// array of threads
+
+	result = Matrix(n, std::vector<int>(n, 0));
+
+	startTime = clock();
+
+	// threads = std::vector<std::thread>();
+	auto nrThreads = n/2 + 1;
+	std::thread* threadsArray = new std::thread[nrThreads];
+
+	for (int i = 0; i < nrThreads; i++) {
+		threadsArray[i] = std::thread(startTask, i * 2, i * 2 + 2);
+	}
+
+	for (int i = 0; i < nrThreads; i++) {
+		threadsArray[i].join();
+	}
+
+	endTime = clock();
+
+	delete[] threadsArray;
+
+	ms = duration_cast<milliseconds>(endTime - startTime).count();
+
+	std::cout << "Time to calculate product for " << n << "x" << m << " matrix with array: `" << ms << " ms`" << std::endl;
+
 }
