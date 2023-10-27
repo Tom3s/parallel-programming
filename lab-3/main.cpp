@@ -8,6 +8,8 @@
 using namespace std::chrono;
 #define clock high_resolution_clock::now
 
+#include "BS_thread_pool_light.hpp"
+
 typedef std::vector<std::vector<int>> Matrix;
 
 const std::string nPrefix = "-n";
@@ -134,4 +136,24 @@ int main(int nrArgs, char* args[]) {
 	ms = duration_cast<milliseconds>(endTime - startTime).count();
 
 	std::cout << "Time to calculate product for " << n << "x" << m << " matrix with batching: `" << ms << " ms`" << std::endl;
+
+	result = Matrix(n, std::vector<int>(n, 0));
+
+	startTime = clock();
+
+	threads = std::vector<std::thread>();
+
+	BS::thread_pool_light pool(std::thread::hardware_concurrency() - 1);
+
+	for (int i = 0; i < n; i+=2) {
+		pool.push_task(startTask, i, i + 2);
+	}
+
+	pool.wait_for_tasks();
+
+	endTime = clock();
+
+	ms = duration_cast<milliseconds>(endTime - startTime).count();
+
+	std::cout << "- Time to calculate product for " << n << "x" << m << " matrix with pool: `" << ms << " ms`" << std::endl;
 }
