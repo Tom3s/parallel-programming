@@ -11,11 +11,17 @@ class Program
 	static async Task Main(string[] args)
 	{
 		string[] urls = {
-			"https://pipe-racer.pro/api/users/picture/64f9b86308a5734caa417c39",
-			"https://pipe-racer.pro/api/users/picture/65049689145f88ce2e423260",
-			"https://pipe-racer.pro/api/users/picture/65072fa22c506606f266799f",
-			"https://pipe-racer.pro/api/users/picture/652c5b734279d8061f8ab5fe",
-			"https://pipe-racer.pro/api/users/picture/653538f14279d8061f8ae500",
+			// "http://pipe-racer.pro/api/users/picture/64f9b86308a5734caa417c39",
+			// "http://pipe-racer.pro/api/users/picture/65049689145f88ce2e423260",
+			// "http://pipe-racer.pro/api/users/picture/65072fa22c506606f266799f",
+			// "http://pipe-racer.pro/api/users/picture/652c5b734279d8061f8ab5fe",
+			// "http://pipe-racer.pro/api/users/picture/653538f14279d8061f8ae500",
+			// "http://pageometry.weebly.com/",
+			// "http://pageometry.weebly.com/section-21-sss-and-sas.html",
+			"http://pageometry.weebly.com/uploads/3/8/7/1/3871472/fig2_2.png",
+			"http://pageometry.weebly.com/uploads/3/8/7/1/3871472/fig3_1_1.png",
+			"http://pageometry.weebly.com/uploads/3/8/7/1/3871472/fig3_1_2.png",
+			"http://pageometry.weebly.com/uploads/3/8/7/1/3871472/fig3_1_3.png",
 		};
 
 		// Run all 3 in parallel and await all of them
@@ -250,7 +256,7 @@ static class SocketHelper
 		// Implementation not provided for brevity
 		// You may use regular expressions or string manipulation to extract the value
 
-		Console.WriteLine(header);
+		// Console.WriteLine(header);
 
 		// For example:
 		var contentLengthStart = header.IndexOf("Content-Length:") + "Content-Length:".Length;
