@@ -25,11 +25,20 @@ class Program
 		};
 
 		// Run all 3 in parallel and await all of them
-		var eventDrivenTask = EventDrivenDownloadAsync(urls);
-		var taskBasedTask = TaskBasedDownloadAsync(urls);
-		var asyncAwaitTask = AsyncAwaitDownloadAsync(urls);
+		// var eventDrivenTask = EventDrivenDownloadAsync(urls);
+		// var taskBasedTask = TaskBasedDownloadAsync(urls);
+		// var asyncAwaitTask = AsyncAwaitDownloadAsync(urls);
+		var taskVersion3 = Version3Yeye(urls); 
 
-		await Task.WhenAll(eventDrivenTask, taskBasedTask, asyncAwaitTask);
+		await Task.WhenAll(
+			// eventDrivenTask,
+			// taskBasedTask, 
+			// asyncAwaitTask,
+			taskVersion3	
+		);
+
+		// Console.WriteLine(await SocketHelper.BeginConnectAsyncVersion3());
+		
 
 		Console.WriteLine("Press any key to exit...");
 	}
@@ -59,29 +68,6 @@ class Program
 
 	static async Task TaskBasedDownloadAsync(string[] urls)
 	{
-		// foreach (var url in urls)
-		// {
-		// 	var contentLength = await Task.Run(() =>
-		// 	{
-		// 		var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-		// 		var endpoint = SocketHelper.GetEndpoint(url);
-
-		// 		var connectTask = SocketHelper.BeginConnectAsync(socket, endpoint);
-		// 		connectTask.Wait();
-
-		// 		var sendTask = SocketHelper.SendRequestAsync(socket, url);
-		// 		sendTask.Wait();
-
-		// 		var receiveTask = SocketHelper.BeginReceiveHeaderAsync(socket);
-		// 		receiveTask.Wait();
-
-		// 		socket.Close();
-
-		// 		return SocketHelper.ParseContentLength(receiveTask.Result);
-		// 	});
-		// 	Console.WriteLine($"[TaskBasedDownloadAsync] Content-Length for {url}: {contentLength}");
-
-		// }
 		List<Task> downloadTasks = new List<Task>();
 
 		foreach (var url in urls)
@@ -113,24 +99,6 @@ class Program
 
 	static async Task AsyncAwaitDownloadAsync(string[] urls)
 	{
-		// 	foreach (var url in urls)
-		// 	{
-		// 		var contentLength = await Task.Run(async () =>
-		// 		{
-		// 			var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-		// 			var endpoint = SocketHelper.GetEndpoint(url);
-
-		// 			await SocketHelper.BeginConnectAsync(socket, endpoint);
-		// 			await SocketHelper.SendRequestAsync(socket, url);
-		// 			var header = await SocketHelper.BeginReceiveHeaderAsync(socket);
-
-		// 			socket.Close();
-
-		// 			return SocketHelper.ParseContentLength(header);
-		// 		});
-
-		// 		Console.WriteLine($"[AsyncAwaitDownloadAsync] Content-Length for {url}: {contentLength}");
-		// 	}
 		List<Task> downloadTasks = new List<Task>();
 
 		foreach (var url in urls)
@@ -141,9 +109,21 @@ class Program
 					var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 					var endpoint = SocketHelper.GetEndpoint(url);
 
-					await SocketHelper.BeginConnectAsync(socket, endpoint);
-					await SocketHelper.SendRequestAsync(socket, url);
-					var header = await SocketHelper.BeginReceiveHeaderAsync(socket);
+					string header = await SocketHelper.BeginConnectAsync(socket, endpoint)
+						.ContinueWith(t =>
+						{
+							return SocketHelper.SendRequestAsync(socket, url)
+								.ContinueWith(t =>
+								{
+									return SocketHelper.BeginReceiveHeaderAsync(socket)
+										.ContinueWith(t =>
+										{
+											return t.Result;
+										});
+								}).Unwrap();
+						}).Unwrap();
+
+
 
 					socket.Close();
 
@@ -153,6 +133,29 @@ class Program
 		}
 
 		await Task.WhenAll(downloadTasks);
+	}
+
+	static async Task Version3Yeye(string[] urls){
+		List<Task> downloadTasks = new List<Task>();
+
+		foreach (var url in urls)
+		{
+			downloadTasks.Add(
+				Task.Run(async () =>
+				{
+					var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+					var endpoint = SocketHelper.GetEndpoint(url);
+
+					int contentLength = await SocketHelper.BeginConnectAsyncVersion3(socket, endpoint, url);
+
+					socket.Close();
+
+					Console.WriteLine($"[AsyncAwaitDownloadAsync] Content-Length for {url}: {contentLength}");
+				})
+			);
+		}
+
+		await Task.WhenAll(downloadTasks);	
 	}
 }
 
@@ -189,8 +192,65 @@ static class SocketHelper
 		}, null);
 		return tcs.Task;
 	}
+	public static Task<int> BeginConnectAsyncVersion3(Socket socket, IPEndPoint endpoint, string url)
+	{
+		var tcs = new TaskCompletionSource<int>();
+		socket.BeginConnect(endpoint, ar =>
+		{
+			try
+			{
+				socket.EndConnect(ar);
+				// tcs.SetResult();
+				Uri uri = new Uri(url);
 
-	public static Task<int> SendRequestAsync(Socket socket, string url, CancellationToken cancellationToken = default)
+				var request = $"GET {uri.PathAndQuery} HTTP/1.1\r\nHost: {uri.Host}\r\n\r\n";
+				var requestData = Encoding.ASCII.GetBytes(request);
+
+				// Check for cancellation before starting the operation
+				// cancellationToken.ThrowIfCancellationRequested();
+
+				socket.BeginSend(requestData, 0, requestData.Length, SocketFlags.None, ar =>
+				{
+					try
+					{
+						// Check for cancellation during the asynchronous operation
+						// cancellationToken.ThrowIfCancellationRequested();
+
+						var bytesSent = socket.EndSend(ar);
+						var headerBuffer = new byte[1024];
+						socket.BeginReceive(headerBuffer, 0, headerBuffer.Length, SocketFlags.None, ar =>
+						{
+							try
+							{
+								var bytesRead = socket.EndReceive(ar);
+								var header = Encoding.ASCII.GetString(headerBuffer, 0, bytesRead);
+								var contentLengthStart = header.IndexOf("Content-Length:") + "Content-Length:".Length;
+								var contentLengthEnd = header.IndexOf("\r\n", contentLengthStart);
+								var contentLengthStr = header.Substring(contentLengthStart, contentLengthEnd - contentLengthStart).Trim();
+								// return int.Parse(contentLengthStr);
+								tcs.SetResult(int.Parse(contentLengthStr));
+							}
+							catch (Exception ex)
+							{
+								tcs.SetException(ex);
+							}
+						}, null);
+					}
+					catch (Exception ex)
+					{
+						tcs.SetException(ex);
+					}
+				}, null);
+			}
+			catch (Exception ex)
+			{
+				tcs.SetException(ex);
+			}
+		}, null);
+		return tcs.Task;
+	}
+
+	public static Task<int> SendRequestAsync(Socket socket, string url)
 	{
 		var tcs = new TaskCompletionSource<int>();
 
@@ -203,14 +263,14 @@ static class SocketHelper
 			var requestData = Encoding.ASCII.GetBytes(request);
 
 			// Check for cancellation before starting the operation
-			cancellationToken.ThrowIfCancellationRequested();
+			// cancellationToken.ThrowIfCancellationRequested();
 
 			socket.BeginSend(requestData, 0, requestData.Length, SocketFlags.None, ar =>
 			{
 				try
 				{
 					// Check for cancellation during the asynchronous operation
-					cancellationToken.ThrowIfCancellationRequested();
+					// cancellationToken.ThrowIfCancellationRequested();
 
 					var bytesSent = socket.EndSend(ar);
 					tcs.SetResult(bytesSent);
