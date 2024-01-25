@@ -74,6 +74,9 @@
 		"coroutine": "cpp",
 		"resumable": "cpp",
 		"future": "cpp",
-		"queue": "cpp"
+		"queue": "cpp",
+		"random": "cpp",
+		"barrier": "cpp",
+		"semaphore": "cpp"
 	}
 }
